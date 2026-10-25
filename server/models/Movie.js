@@ -61,6 +61,11 @@ const movieSchema = new mongoose.Schema(
     trailerUrl: {
       type: String
     },
+    tmdbId: {
+      type: String,
+      index: true,
+      sparse: true
+    },
     averageRating: {
       type: Number,
       default: 0
@@ -74,6 +79,14 @@ const movieSchema = new mongoose.Schema(
     timestamps: true
   }
 );
+
+// High-performance compound & single indexes for 1M+ scale
+movieSchema.index({ averageRating: -1, numRatings: -1 });
+movieSchema.index({ releaseYear: -1 });
+movieSchema.index({ title: 1 });
+movieSchema.index({ genres: 1, averageRating: -1 });
+movieSchema.index({ industry: 1, averageRating: -1 });
+movieSchema.index({ createdAt: -1 });
 
 // Index for text search by title, director, cast, description
 movieSchema.index(

@@ -7,3 +7,13 @@ client/node_modules
 server/node_modules
 client/dist
 *.log
+*.csv
+server/*.csv
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+

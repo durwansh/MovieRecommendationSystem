@@ -46,32 +46,58 @@ function calculateCosineSimilarity(ratingsMap1, ratingsMap2) {
  * Generate Hybrid AI Movie Recommendations for a User
  */
 async function generateRecommendations(userId, limit = 10) {
-  const allMovies = await Movie.find({});
-  if (allMovies.length === 0) return [];
+  // 1. Attempt to query dedicated Python Machine Learning Service (FastAPI / SVD + TF-IDF)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const pyResp = await fetch(`http://127.0.0.1:8000/recommend/${userId}?limit=${limit}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (pyResp.ok) {
+      const pyData = await pyResp.json();
+      if (pyData.recommendations && pyData.recommendations.length > 0) {
+        return pyData.recommendations;
+      }
+    }
+  } catch (pyErr) {
+    // Python ML service is offline or timed out; continue with local fallback
+  }
 
   // Fetch current user ratings and watchlist
-  const userRatings = await Rating.find({ user: userId });
-  const userWatchlist = await Watchlist.find({ user: userId });
-  const user = await User.findById(userId);
+  const [userRatings, userWatchlist, user] = await Promise.all([
+    Rating.find({ user: userId }).lean(),
+    Watchlist.find({ user: userId }).lean(),
+    User.findById(userId).lean()
+  ]);
 
   const ratedMovieIds = new Set(userRatings.map(r => r.movie.toString()));
   const watchlistMovieIds = new Set(userWatchlist.map(w => w.movie.toString()));
 
   // Cold Start Check: If user has fewer than 2 ratings
   if (userRatings.length < 2) {
-    return generateColdStartRecommendations(allMovies, ratedMovieIds, user?.preferredGenres || [], limit);
+    const preferredGenres = user?.preferredGenres || [];
+    let query = {};
+    if (preferredGenres.length > 0) {
+      query.genres = { $in: preferredGenres };
+    }
+    const coldStartCandidates = await Movie.find(query)
+      .sort({ averageRating: -1, numRatings: -1 })
+      .limit(60)
+      .lean();
+
+    return generateColdStartRecommendations(coldStartCandidates, ratedMovieIds, preferredGenres, limit);
   }
 
-  // 1. Content-Based Score Calculation
-  // Construct user profile based on highly rated movies (score >= 3) & watchlist movies
+  // 1. Content-Based Profile Construction
   const positiveRatings = userRatings.filter(r => r.score >= 3);
-  const positiveMovieIds = positiveRatings.map(r => r.movie.toString());
-  const seedMovies = allMovies.filter(m => positiveMovieIds.includes(m._id.toString()) || watchlistMovieIds.has(m._id.toString()));
+  const positiveMovieIds = positiveRatings.map(r => r.movie);
+  const seedMovieIds = [...new Set([...positiveMovieIds, ...userWatchlist.map(w => w.movie)])];
 
-  // Extract aggregated user genre weights and director preferences
+  const seedMovies = await Movie.find({ _id: { $in: seedMovieIds } }).lean();
+
   const genreWeights = {};
   const directorWeights = {};
-  let totalPositiveCount = seedMovies.length || 1;
 
   seedMovies.forEach(m => {
     (m.genres || []).forEach(g => {
@@ -82,14 +108,31 @@ async function generateRecommendations(userId, limit = 10) {
     }
   });
 
-  // Include explicit preferred genres if set
   (user?.preferredGenres || []).forEach(g => {
     genreWeights[g] = (genreWeights[g] || 0) + 2;
   });
 
+  const topUserGenres = Object.keys(genreWeights)
+    .sort((a, b) => genreWeights[b] - genreWeights[a])
+    .slice(0, 5);
+
+  // Retrieve candidate movies (top matching genres + popular baseline)
+  const candidateQuery = topUserGenres.length > 0
+    ? { genres: { $in: topUserGenres } }
+    : {};
+
+  const candidateMovies = await Movie.find(candidateQuery)
+    .sort({ averageRating: -1, numRatings: -1 })
+    .limit(500)
+    .lean();
+
+  if (candidateMovies.length === 0) return [];
+
+  let totalPositiveCount = Math.max(1, seedMovies.length);
+
   // 2. Collaborative Filtering Calculation
-  // Fetch all ratings across all users
-  const allRatings = await Rating.find({});
+  // Fetch recent ratings for collaborative signals
+  const allRatings = await Rating.find({}).limit(5000).lean();
   const userRatingsMap = {}; // { userId: { movieId: score } }
 
   allRatings.forEach(r => {
@@ -113,7 +156,7 @@ async function generateRecommendations(userId, limit = 10) {
   // Calculate scores for candidate movies (not yet rated by the target user)
   const recommendations = [];
 
-  for (const movie of allMovies) {
+  for (const movie of candidateMovies) {
     const mId = movie._id.toString();
     if (ratedMovieIds.has(mId)) continue; // Skip already rated movies
 

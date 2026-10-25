@@ -52,6 +52,18 @@ An AI-Powered Movie Recommendation System built with the **MERN Stack** (MongoDB
    npm run dev
    ```
 
-5. **Demo Accounts**:
+5. **Python ML Pipeline (Optional / Machine Learning Submission)**:
+   ```bash
+   # Train the SVD + TF-IDF Hybrid Model
+   python -m ml_pipeline.train
+
+   # Evaluate ML metrics (RMSE, MAE, latency benchmark)
+   python -m ml_pipeline.evaluate
+
+   # Start the Python ML FastAPI inference server
+   python -m uvicorn ml_pipeline.service:app --port 8000
+   ```
+
+6. **Demo Accounts**:
    - **Admin Account**: Email: `admin@movieai.com`, Password: `adminpassword123`
    - **User Account**: Email: `user@movieai.com`, Password: `userpassword123`

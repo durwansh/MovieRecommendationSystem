@@ -146,7 +146,7 @@ const deleteUser = async (req, res) => {
 // @access  Private/Admin
 const getSystemStats = async (req, res) => {
   try {
-    const totalMovies = await Movie.countDocuments();
+    const totalMovies = await Movie.estimatedDocumentCount();
     const totalUsers = await User.countDocuments();
     const totalRatings = await Rating.countDocuments();
 

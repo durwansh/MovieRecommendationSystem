@@ -32,30 +32,36 @@ const getMovies = async (req, res) => {
       query.$or = [
         { title: { $regex: safeSearch, $options: 'i' } },
         { director: { $regex: safeSearch, $options: 'i' } },
-        { cast: { $regex: safeSearch, $options: 'i' } },
-        { description: { $regex: safeSearch, $options: 'i' } },
-        { industry: { $regex: safeSearch, $options: 'i' } },
-        { language: { $regex: safeSearch, $options: 'i' } }
+        { cast: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
-    let sortOptions = { createdAt: -1 };
+    // Default to rating sort for best quality curation
+    let sortOptions = { averageRating: -1, numRatings: -1 };
     if (sort === 'rating') sortOptions = { averageRating: -1, numRatings: -1 };
     if (sort === 'year') sortOptions = { releaseYear: -1 };
     if (sort === 'title') sortOptions = { title: 1 };
+    if (sort === 'latest') sortOptions = { createdAt: -1 };
 
-    const skip = (Number(page) - 1) * Number(limit);
-    const count = await Movie.countDocuments(query);
-    const movies = await Movie.find(query)
-      .sort(sortOptions)
-      .limit(Number(limit))
-      .skip(skip);
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 24));
+    const skip = (pageNum - 1) * limitNum;
+
+    const hasFilters = Object.keys(query).length > 0;
+    const [count, movies] = await Promise.all([
+      hasFilters ? Movie.countDocuments(query) : Movie.estimatedDocumentCount(),
+      Movie.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+    ]);
 
     res.json({
       success: true,
       movies,
-      page: Number(page),
-      pages: Math.ceil(count / Number(limit)),
+      page: pageNum,
+      pages: Math.ceil(count / limitNum),
       total: count
     });
   } catch (error) {
@@ -102,11 +108,19 @@ const getMovieById = async (req, res) => {
   }
 };
 
+let cachedFilters = null;
+let lastFilterFetch = 0;
+
 // @desc    Get all distinct filter metadata
 // @route   GET /api/movies/genres
 // @access  Public
 const getGenres = async (req, res) => {
   try {
+    const now = Date.now();
+    if (cachedFilters && (now - lastFilterFetch < 3600000)) {
+      return res.json({ success: true, ...cachedFilters });
+    }
+
     const [genres, industries, languages, contentTypes] = await Promise.all([
       Movie.distinct('genres'),
       Movie.distinct('industry'),
@@ -114,12 +128,17 @@ const getGenres = async (req, res) => {
       Movie.distinct('contentType')
     ]);
 
-    res.json({
-      success: true,
+    cachedFilters = {
       genres: genres.filter(Boolean).sort(),
       industries: industries.filter(Boolean).sort(),
       languages: languages.filter(Boolean).sort(),
       contentTypes: contentTypes.filter(Boolean).sort()
+    };
+    lastFilterFetch = now;
+
+    res.json({
+      success: true,
+      ...cachedFilters
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

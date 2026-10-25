@@ -6,7 +6,12 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed": "node utils/seedData.js"
+    "seed": "node utils/seedData.js",
+    "seed:1m": "node utils/seed1MTmdb.js",
+    "seed:download": "node utils/downloadDataset.js",
+    "ml:train": "python -m ml_pipeline.train",
+    "ml:eval": "python -m ml_pipeline.evaluate",
+    "ml:serve": "python -m uvicorn ml_pipeline.service:app --port 8000"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

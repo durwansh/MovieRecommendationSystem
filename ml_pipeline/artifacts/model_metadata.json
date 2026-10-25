@@ -1,0 +1,25 @@
+{
+  "model_version": "1.0.0",
+  "trained_at": "2026-10-25T14:51:10.754416",
+  "total_movies_indexed": 25000,
+  "total_ratings": 5,
+  "total_users": 3,
+  "collaborative_metrics": {
+    "n_users": 2,
+    "n_movies_rated": 4,
+    "n_factors": 1,
+    "train_rmse": 1.6383,
+    "test_rmse": 1.6383,
+    "test_mae": 1.3528,
+    "explained_variance_ratio": 0.1509
+  },
+  "content_metrics": {
+    "vocab_size": 5000,
+    "matrix_shape": [
+      25000,
+      5000
+    ],
+    "sparsity": 0.9953
+  },
+  "training_duration_seconds": 4.6
+}
