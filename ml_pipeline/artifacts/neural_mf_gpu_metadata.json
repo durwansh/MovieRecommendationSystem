@@ -1,0 +1,11 @@
+{
+  "model_type": "PyTorch Neural Matrix Factorization (NeuMF)",
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "epochs": 10,
+  "embedding_dim": 32,
+  "final_test_rmse": 0.9492,
+  "total_time_seconds": 33.1,
+  "num_users": 2500,
+  "num_movies": 5000
+}
